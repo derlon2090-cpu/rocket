@@ -1,0 +1,24 @@
+import React,{useMemo,useRef,useState} from 'react';
+import './Timeline.css';
+import {Copy,Plus,Scissors,Trash2,ZoomIn,ZoomOut} from 'lucide-react';
+import {FPS,TRACK_TYPES,deleteClip,duplicateClip,makeTrack,moveClip,resizeClip,splitClip,timelineDuration} from './TimelineModel.js';
+
+const labels={video:'فيديو',audio:'صوت',text:'نص',image:'صور',effects:'مؤثرات'};
+const color={video:'#287f9b',audio:'#347a68',text:'#765eb0',image:'#a36c3a',effects:'#b04869'};
+export function Timeline({tracks,onChange,playhead,onSeek,selected,onSelect,onAddClip}){
+ const [zoom,setZoom]=useState(42),[drag,setDrag]=useState(null);const ruler=useRef(null);const duration=Math.max(15,timelineDuration(tracks));const width=duration*zoom;
+ const commit=(trackId,fn)=>onChange(tracks.map(track=>track.id===trackId?fn(track):track));
+ const addTrack=type=>onChange([...tracks,makeTrack(type,tracks.filter(x=>x.type===type).length+1)]);
+ const split=()=>{const found=tracks.find(t=>t.clips.some(c=>c.id===selected));if(found)commit(found.id,t=>splitClip(t,selected,playhead));};
+ const duplicate=()=>{const found=tracks.find(t=>t.clips.some(c=>c.id===selected));if(found)commit(found.id,t=>duplicateClip(t,selected));};
+ const remove=()=>{const found=tracks.find(t=>t.clips.some(c=>c.id===selected));if(found){commit(found.id,t=>deleteClip(t,selected));onSelect(null);}};
+ const markers=useMemo(()=>tracks.flatMap(t=>t.clips.flatMap(c=>[c.start,c.end])),[tracks]);
+ const seek=e=>{const rect=ruler.current.getBoundingClientRect();onSeek(Math.max(0,Math.min(duration,(e.clientX-rect.left-88)/zoom)));};
+ const startDrag=(e,track,clip,edge='move')=>{if(e.button!==0)return;e.stopPropagation();e.currentTarget.setPointerCapture(e.pointerId);setDrag({trackId:track.id,clipId:clip.id,edge,x:e.clientX,original:clip});onSelect(clip.id);};
+ const move=e=>{if(!drag)return;const delta=(e.clientX-drag.x)/zoom;const t=tracks.find(x=>x.id===drag.trackId);if(drag.edge==='move')commit(t.id,x=>moveClip(x,drag.clipId,drag.original.start+delta,markers));else commit(t.id,x=>resizeClip(x,drag.clipId,drag.edge==='left'?'start':'end',drag.edge==='left'?drag.original.start+delta:drag.original.end+delta));};
+ return <div className="multi-timeline" onPointerMove={move} onPointerUp={()=>setDrag(null)} onPointerCancel={()=>setDrag(null)}>
+  <div className="timeline-toolbar"><div><b>المسارات</b><span>{tracks.length} مسارات · {Math.round(duration*FPS)} إطار</span></div><div className="timeline-actions"><button title="إضافة مقطع الفيديو الحالي" onClick={onAddClip}><Plus size={14}/></button><button title="تقسيم عند المؤشر" onClick={split} disabled={!selected}><Scissors size={14}/></button><button title="نسخ المقطع" onClick={duplicate} disabled={!selected}><Copy size={14}/></button><button title="حذف المقطع" onClick={remove} disabled={!selected}><Trash2 size={14}/></button><button title="تصغير" onClick={()=>setZoom(v=>Math.max(12,v-8))}><ZoomOut size={14}/></button><button title="تكبير" onClick={()=>setZoom(v=>Math.min(120,v+8))}><ZoomIn size={14}/></button><select aria-label="إضافة مسار" value="" onChange={e=>{if(e.target.value)addTrack(e.target.value);}}><option value="">+ مسار</option>{TRACK_TYPES.map(type=><option key={type} value={type}>{labels[type]}</option>)}</select></div></div>
+  <div className="timeline-scroll"><div className="timeline-canvas" style={{width:Math.max(568,width+88)}}><div ref={ruler} className="timeline-ruler" onClick={seek}>{Array.from({length:Math.ceil(duration/5)+1},(_,i)=><span key={i} style={{left:88+i*5*zoom}}>{Math.floor(i*5/60).toString().padStart(2,'0')}:{Math.floor(i*5%60).toString().padStart(2,'0')}<i/></span>)}<div className="timeline-playhead" style={{left:88+playhead*zoom}}/></div>
+   {tracks.map(track=><div className="timeline-row" key={track.id}><div className="track-label"><b>{track.name}</b><small>{labels[track.type]}</small></div><div className={`track-lane lane-${track.type}`} style={{width:Math.max(480,width)}}>{track.clips.map(clip=><div key={clip.id} role="button" tabIndex={0} className={`timeline-clip ${selected===clip.id?'selected':''}`} style={{left:clip.start*zoom,width:Math.max(10,(clip.end-clip.start)*zoom),background:color[track.type]}} onPointerDown={e=>startDrag(e,track,clip)} onKeyDown={e=>{if(e.key==='Delete')commit(track.id,t=>deleteClip(t,clip.id));}} title={`${clip.name} · ${clip.start.toFixed(2)}s–${clip.end.toFixed(2)}s`}><span className="clip-left" onPointerDown={e=>startDrag(e,track,clip,'left')}/><b>{clip.name}</b><small>{clip.start.toFixed(1)}–{clip.end.toFixed(1)}s</small><span className="clip-right" onPointerDown={e=>startDrag(e,track,clip,'right')}/></div>)}{track.clips.length===0&&<span className="empty-track">مسار فارغ · أضف مساراً من الأعلى</span>}</div></div>)}<div className="timeline-playhead full" style={{left:88+playhead*zoom,top:25,height:`${tracks.length*46}px`}}/></div></div>
+ </div>;
+}

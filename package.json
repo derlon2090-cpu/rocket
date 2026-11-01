@@ -1,0 +1,36 @@
+{
+  "name": "video-and-shorts-you",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "vite build",
+    "test": "node --test src/effects/EffectEngine.test.js src/timeline/TimelineModel.test.js analyzer/LocalAIProvider.test.js test/integration.test.js",
+    "test:effects-export": "node scripts/verify-effects-export.mjs",
+    "start": "node server.mjs",
+    "render": "remotion render src/main.jsx Short final.mp4 --codec h264 --crf 16 --pixel-format yuv420p --concurrency=2"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@remotion/cli": "^4.0.538",
+    "@remotion/renderer": "^4.0.538",
+    "bullmq": "^6.5.3",
+    "express": "^5.3.0",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
+    "ioredis": "^6.0.0",
+    "lucide-react": "^1.61.0",
+    "multer": "^2.5.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "remotion": "^4.0.538"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.19"
+  }
+}
