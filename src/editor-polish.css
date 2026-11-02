@@ -1,0 +1,123 @@
+/* A readable, consistent surface over the editor's functional component styles. */
+:root {
+  color-scheme: dark;
+  --bg: #080d16;
+  --panel: #101927;
+  --panel2: #142132;
+  --line: #263449;
+  --line2: #34445b;
+  --muted: #9aa9bc;
+  --text: #f1f5fb;
+  --cyan: #63e2e7;
+  --cyan2: #25c4d1;
+}
+
+body {
+  background:
+    radial-gradient(ellipse at 72% -18%, #19324b 0, transparent 42%),
+    var(--bg);
+  line-height: 1.55;
+}
+
+button, input, select, textarea { transition: border-color .16s ease, background-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.topbar {
+  background: #0b111deF;
+  border-bottom-color: #29364a;
+  box-shadow: 0 8px 26px #0002;
+}
+.brand-mark { width: 38px; height: 38px; border-radius: 12px; }
+.brand > span { font-size: 19px; }
+.brand small { font-size: 11px; }
+.top-quiet { min-height: 38px; font-size: 12px; }
+.project-panel { padding-top: clamp(28px, 4vw, 52px); }
+.project-head { align-items: center; }
+.project-name-input { font-size: clamp(22px, 2.2vw, 29px); }
+.eyebrow { font-size: 11px; letter-spacing: .15px; }
+.project-head p { font-size: 13px; }
+
+.preview-card, .timeline-panel, .transcript-panel, .tools-card, .settings-card, .export-card {
+  border-color: #29374b;
+  border-radius: 16px;
+  box-shadow: 0 12px 34px #0002, inset 0 1px #ffffff05;
+}
+.preview-card { min-height: 460px; }
+.preview-card.has-media { border-radius: 16px; }
+.preview-card.drop-active { border-color: var(--cyan); box-shadow: 0 0 0 3px #63e2e733, 0 15px 50px #0004; }
+.empty-preview { padding: 42px 24px; }
+.upload-symbol { width: 68px; height: 68px; border-radius: 20px; }
+.empty-preview h2 { font-size: clamp(19px, 2vw, 23px); }
+.empty-preview > p { font-size: 13px; }
+.primary-btn { min-height: 42px; border-radius: 10px; padding-inline: 21px; font-size: 13px; }
+.file-hint { font-size: 11px; }
+.url-import { width: min(410px, 92%); }
+.url-import > span { font-size: 11px; }
+.url-import > div { height: 42px; border-radius: 10px; }
+.url-import input { font-size: 12px; }
+
+.card-head h3, .settings-head h3 { font-size: 15px; }
+.tools-card, .timeline-panel, .transcript-panel, .settings-card { padding: 17px; }
+.ai-dashboard { font-size: 11px; padding: 10px 12px; gap: 10px; }
+.ai-dashboard button { font-size: 11px; }
+.suggestion-controls button, .edit-recommendations button { min-height: 30px; padding: 5px 9px; font-size: 10px; }
+.suggestion-info b { font-size: 12px; }
+.suggestion-info small, .analysis-note, .caption-hint { font-size: 10px; }
+.track-label b, .track-label small, .timeline-clip b, .timeline-clip small { font-size: 10px; }
+.timeline-scroll { border-radius: 9px; }
+.icon-btn { width: 36px; height: 36px; }
+.export-btn { min-height: 42px; border-radius: 10px; font-size: 12px; }
+.statusbar { min-height: 36px; border-top-color: #263449; }
+.error-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff727d; box-shadow: 0 0 8px #ff727d66; }
+.error-banner { border-color: #9c454b; background: #351c23; }
+
+@media (min-width: 1450px) {
+  .project-panel { padding-inline: clamp(54px, 6vw, 110px); }
+  .editor-grid { gap: 22px; }
+  .left-column, .right-column { gap: 18px; }
+}
+
+@media (max-width: 760px) {
+  .topbar { padding-inline: 12px; }
+  .workspace { display: block; }
+  .side-rail { display: none; }
+  .project-panel { padding: 24px 16px 68px; }
+  .project-head { align-items: flex-start; gap: 10px; }
+  .project-head > div:first-child { min-width: 0; }
+  .project-name-input { width: min(100%, 430px); font-size: 21px; }
+  .project-head p { max-width: 52ch; line-height: 1.7; }
+  .preview-card { min-height: 390px; border-radius: 14px; }
+  .empty-preview { min-height: 390px; }
+  .right-column { display: flex; }
+  .tools-card, .timeline-panel, .transcript-panel, .settings-card { padding: 15px; }
+  .statusbar { padding-inline: 14px; }
+}
+
+@media (max-width: 480px) {
+  .topbar { height: 58px; }
+  .brand-mark { width: 34px; height: 34px; }
+  .brand > span { font-size: 16px; }
+  .brand small { font-size: 9px; }
+  .top-actions { gap: 7px; }
+  .top-quiet { width: 36px; height: 36px; }
+  .project-panel { padding-inline: 11px; }
+  .project-head { margin-bottom: 15px; }
+  .project-head h1 { font-size: 21px; }
+  .project-head p { font-size: 11px; }
+  .project-menu .icon-btn { width: 34px; height: 34px; }
+  .preview-card { min-height: 360px; }
+  .empty-preview { min-height: 360px; padding-inline: 12px; }
+  .empty-preview > p { max-width: 30ch; text-align: center; line-height: 1.7; }
+  .steps span { font-size: 9px; }
+  .export-card { align-items: stretch; flex-direction: column; gap: 12px; }
+  .export-btn { width: 100%; justify-content: center; }
+  .project-modal-backdrop { padding: 10px; }
+  .project-list-modal { padding: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
