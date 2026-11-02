@@ -63,6 +63,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tools-card, .timeline-panel, .transcript-panel, .settings-card { padding: 17px; }
 .ai-dashboard { font-size: 11px; padding: 10px 12px; gap: 10px; }
 .ai-dashboard button { font-size: 11px; }
+.ai-setup-hint { margin: 8px 0 10px; padding: 10px 12px; border: 1px solid #6c532a; border-radius: 9px; background: #2a2114; color: #f1d49d; font-size: 11px; line-height: 1.7; }
+.ai-status-error { color: #ffc46a; cursor: help; }
 .suggestion-controls button, .edit-recommendations button { min-height: 30px; padding: 5px 9px; font-size: 10px; }
 .suggestion-info b { font-size: 12px; }
 .suggestion-info small, .analysis-note, .caption-hint { font-size: 10px; }

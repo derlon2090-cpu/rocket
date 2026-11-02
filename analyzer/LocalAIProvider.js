@@ -1,4 +1,31 @@
 const OLLAMA_URL = (process.env.OLLAMA_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
+const AI_GATEWAY_URL = 'https://ai-gateway.vercel.sh/v1';
+const gatewayToken = requestToken => requestToken || process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN || '';
+const gatewayModel = () => process.env.AI_GATEWAY_MODEL || 'openai/gpt-4o-mini';
+
+async function requestGateway(payload, timeout = 600000, token) {
+  const authToken = gatewayToken(token);
+  if (!authToken) throw new Error('لم يُعثر على مصادقة Vercel AI Gateway. فعّل Secure Backend Access (OIDC) للمشروع أو أضف AI_GATEWAY_API_KEY في الخادم.');
+  let response;
+  try {
+    response = await fetch(`${AI_GATEWAY_URL}/chat/completions`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${authToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeout),
+    });
+  } catch (error) {
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') throw new Error('انتهت مهلة نموذج الذكاء الاصطناعي. قلّل حجم التفريغ ثم أعد المحاولة.');
+    throw new Error(`تعذّر الاتصال بـ Vercel AI Gateway: ${error.message}`);
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data.error?.message || data.message || `HTTP ${response.status}`;
+    if (response.status === 401 || response.status === 403) throw new Error('رفض Vercel AI Gateway المصادقة. تحقّق من ربط المشروع وتفعيل Vercel OIDC أو ضبط AI_GATEWAY_API_KEY.');
+    throw new Error(`فشل نموذج Vercel AI Gateway (${response.status}): ${message}`);
+  }
+  return data;
+}
 
 async function request(path, options = {}, timeout = 5000) {
   try {
@@ -12,14 +39,22 @@ async function request(path, options = {}, timeout = 5000) {
   }
 }
 
-export async function ollamaStatus() {
+export async function ollamaStatus(requestToken) {
+  if (gatewayToken(requestToken)) {
+    const model = gatewayModel();
+    const visionModel=process.env.AI_GATEWAY_VISION_MODEL||'';
+    return { available: true, models: [model], model, modelBytes: null, modelAvailable: true, visionModel, visionAvailable: Boolean(visionModel), provider: 'Vercel AI Gateway', gateway: true, local: false };
+  }
+  if (process.env.VERCEL && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(OLLAMA_URL)) {
+    return { available: false, models: [], model: gatewayModel(), modelAvailable: false, visionModel: null, visionAvailable: false, provider: 'غير مهيأ', gateway: false, local: false, error: 'نموذج Ollama المحلي غير متاح من Vercel. فعّل Secure Backend Access (OIDC) للمشروع لإرسال التحليل إلى Vercel AI Gateway.' };
+  }
   try {
     const [tags, version] = await Promise.all([request('/api/tags'), request('/api/version')]);
     const models = (tags.models || []).map(model => model.name);
     const configured = process.env.OLLAMA_MODEL || 'qwen3:8b';
     const modelInfo=(tags.models||[]).find(model=>model.name===configured||model.name.startsWith(`${configured}:`));
     const visionModel=process.env.OLLAMA_VISION_MODEL||'';
-    return { available: true, version: version.version, models, model: configured, modelBytes:Number(modelInfo?.size)||null, modelAvailable: models.some(name => name === configured || name.startsWith(`${configured}:`)), visionModel, visionAvailable:Boolean(visionModel&&models.some(name=>name===visionModel||name.startsWith(`${visionModel}:`))), local: true };
+    return { available: true, version: version.version, models, model: configured, modelBytes:Number(modelInfo?.size)||null, modelAvailable: models.some(name => name === configured || name.startsWith(`${configured}:`)), visionModel, visionAvailable:Boolean(visionModel&&models.some(name=>name===visionModel||name.startsWith(`${visionModel}:`))), provider: 'Ollama local', gateway: false, local: true };
   } catch (error) {
     return { available: false, models: [], model: process.env.OLLAMA_MODEL || 'qwen3:8b', modelAvailable: false, local: true, error: error.message };
   }
@@ -50,7 +85,21 @@ export function alignClipToUtterances(start,end,words,utterances,duration){
   return end>start?{start,end}:null;
 }
 
-async function inferJson(status, prompt) {
+async function inferJson(status, prompt, providerToken) {
+  if (status.gateway) {
+    const data = await requestGateway({
+      model: status.model,
+      temperature: 0.15,
+      max_tokens: 1200,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: 'أنت محرر فيديو. حلل النص فقط، ولا تختلق وقائع أو كلامًا. أعد JSON مطابقًا للمطلوب.' },
+        { role: 'user', content: prompt },
+      ],
+    }, Number(process.env.AI_GATEWAY_TIMEOUT_MS) || 90000, providerToken);
+    const content = String(data.choices?.[0]?.message?.content || '').trim();
+    try { return JSON.parse(content); } catch { throw new Error('أعاد نموذج الذكاء الاصطناعي استجابة غير مكتملة. أعد المحاولة أو قلّل طول الفيديو.'); }
+  }
   const data = await request('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
     model: status.model, stream: false, think: false, format: 'json', keep_alive: 0, options: { temperature: 0.15, num_ctx: Number(process.env.OLLAMA_NUM_CTX)||2048, num_predict: 768 },
     messages: [{ role: 'system', content: 'أنت محرر فيديو. حلل النص فقط، ولا تختلق وقائع أو كلامًا. أعد JSON مطابقًا للمطلوب.' }, { role: 'user', content: prompt }]
@@ -63,19 +112,34 @@ async function inferJson(status, prompt) {
   }
 }
 
-async function readyModel() {
-  const status = await ollamaStatus();
+async function readyModel(providerToken) {
+  const status = await ollamaStatus(providerToken);
   if (!status.available) throw new Error(status.error);
   if (!status.modelAvailable) throw new Error(`النموذج ${status.model} غير مثبت. نفّذ: ollama pull ${status.model}`);
   return status;
 }
 
-export async function describeSceneFrames(frames=[]) {
-  const status=await ollamaStatus();
+export async function describeSceneFrames(frames=[], providerToken) {
+  const status=await ollamaStatus(providerToken);
   if(!status.available||!status.visionAvailable)return {descriptions:[],available:false,model:status.visionModel||null};
   const descriptions=[];
   for(const frame of frames.slice(0,4)){
     try{
+      if (status.gateway) {
+        const data = await requestGateway({
+          model: status.visionModel,
+          temperature: 0.1,
+          max_tokens: 300,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: `صف بصريًا وباختصار العناصر الظاهرة في إطار من فيديو عند ${Number(frame.time).toFixed(1)} ثانية. لا تستنتج معلومات غير مرئية. أعد JSON: {"description":"وصف محايد قصير"}` },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${frame.image}` } },
+          ] }],
+        }, 90000, providerToken);
+        const result = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+        descriptions.push({ time: Number(frame.time), description: String(result.description || '').slice(0, 300) });
+        continue;
+      }
       const data=await request('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({model:status.visionModel,stream:false,format:'json',options:{temperature:0.1,num_ctx:Number(process.env.OLLAMA_NUM_CTX)||4096,num_predict:250},messages:[{role:'user',content:`صف بصريًا وباختصار العناصر الظاهرة في إطار من فيديو عند ${Number(frame.time).toFixed(1)} ثانية. لا تستنتج معلومات غير مرئية. أعد JSON: {"description":"وصف محايد قصير"}`,images:[frame.image]}]})},90000);
       const result=JSON.parse(data.message?.content||'{}');
       descriptions.push({time:Number(frame.time),description:String(result.description||'').slice(0,300)});
@@ -84,13 +148,13 @@ export async function describeSceneFrames(frames=[]) {
   return {descriptions,available:true,model:status.visionModel};
 }
 
-export async function suggestClips({ duration, words, candidates = [], scenes = [], utterances = [] }) {
-  const status = await readyModel();
+export async function suggestClips({ duration, words, candidates = [], scenes = [], utterances = [], providerToken }) {
+  const status = await readyModel(providerToken);
   const validWords = validWordList(words, duration);
   if (!validWords.length) throw new Error('لا توجد كلمات موقّتة صالحة للتحليل.');
   const utteranceContext = (Array.isArray(utterances) ? utterances : []).slice(0, 800).map(u => ({start:Number(u.start),end:Number(u.end),text:String(u.text||'').slice(0,600)}));
   const prompt = `اختر حتى خمسة مقاطع قصيرة ذات قيمة تحريرية من كلام عربي أو متعدد اللغات. قيّم اكتمال الفكرة والسياق والافتتاحية التعليمية/القصصية/السؤال والجواب/العاطفية أو الطريفة. أعد حدودًا داخل مدة المصدر وعلى الكلام المسموع، واجعل كل مقطع يحافظ على شرح مكتمل مع أقل قدر ممكن من الحشو. لا تستخدم ارتفاع الصوت وحده كدليل على الأهمية. confidence تقدير تحريري من 0 إلى 1 وليس توقعًا للانتشار. أعد JSON: {"clips":[{"start":0,"end":10,"title":"عنوان قصير","reason":"سبب مستند إلى الكلام","confidence":0.8,"category":"educational|story|hook|qa|emotional|funny","style":"اقتراح بصري قصير"}]}. المدة ${duration.toFixed(2)} ثانية. المقاطع المكتشفة بصريًا ${JSON.stringify(scenes).slice(0,5000)}. مؤشرات الطاقة للمساعدة فقط ${JSON.stringify(candidates).slice(0,2500)}. جمل Whisper ${JSON.stringify(utteranceContext).slice(0,9000)}. الكلمات الموقّتة ${JSON.stringify(validWords).slice(0,16000)}`;
-  const parsed = await inferJson(status, prompt);
+  const parsed = await inferJson(status, prompt, providerToken);
   const clips = (Array.isArray(parsed.clips) ? parsed.clips : []).map(item => {
     let start = Number(item.start), end = Number(item.end);
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
@@ -112,23 +176,23 @@ export async function suggestClips({ duration, words, candidates = [], scenes = 
     const subjectVisibility=Math.max(0,Math.min(1,mean('faceVisibility',0.5)));
     const scoreFactors={semantic:semantic,speechCompleteness:Math.max(0,Math.min(1,speechCompleteness)),audioActivity:Math.max(0,Math.min(1,audioActivity)),visualQuality,motion,subjectVisibility};
     const score=semantic*.5+scoreFactors.speechCompleteness*.2+scoreFactors.audioActivity*.1+visualQuality*.1+motion*.05+subjectVisibility*.05;
-    return {start,end,title:String(item.title||'لحظة مقترحة').slice(0,100),reason:String(item.reason||'').slice(0,300),category:String(item.category||'').slice(0,30),confidence:semantic,score:Number(score.toFixed(3)),scoreFactors,transcript,style:String(item.style||'').slice(0,120),source:'ollama',approved:false};
+    return {start,end,title:String(item.title||'لحظة مقترحة').slice(0,100),reason:String(item.reason||'').slice(0,300),category:String(item.category||'').slice(0,30),confidence:semantic,score:Number(score.toFixed(3)),scoreFactors,transcript,style:String(item.style||'').slice(0,120),source:status.gateway?'ai-gateway':'ollama',approved:false};
   }).filter(Boolean).sort((a,b)=>b.score-a.score);
   const unique=[];
   for(const clip of clips) if(unique.every(item=>clip.start>=item.end||clip.end<=item.start)) unique.push(clip);
-  return {clips:unique.slice(0,5),model:status.model,local:true};
+  return {clips:unique.slice(0,5),model:status.model,provider:status.provider,local:!status.gateway};
 }
 
-export async function suggestEdits({ words, duration }) {
-  const status = await readyModel();
+export async function suggestEdits({ words, duration, providerToken }) {
+  const status = await readyModel(providerToken);
   const safeWords = validWordList(words,duration);
   if (!safeWords.length) throw new Error('أنشئ التفريغ المحلي أولًا للحصول على اقتراحات تحرير مرتبطة بالكلام.');
-  const parsed = await inferJson(status, `اقترح حتى 5 قرارات تحريرية اختيارية من قائمة آمنة: highlight, subtle_zoom, vertical_crop, cinematic_color, transition. لا تنشئ مرشحات أو إعدادات برمجية. اربط كل اقتراح بعبارة فعلية في التفريغ وحدد توقيتها. أعد JSON: {"recommendations":[{"type":"highlight","start":0,"end":2,"phrase":"عبارة حرفية","reason":"سبب مختصر","value":1}]}. المدة ${duration}. الكلمات: ${JSON.stringify(safeWords).slice(0,16000)}`);
+  const parsed = await inferJson(status, `اقترح حتى 5 قرارات تحريرية اختيارية من قائمة آمنة: highlight, subtle_zoom, vertical_crop, cinematic_color, transition. لا تنشئ مرشحات أو إعدادات برمجية. اربط كل اقتراح بعبارة فعلية في التفريغ وحدد توقيتها. أعد JSON: {"recommendations":[{"type":"highlight","start":0,"end":2,"phrase":"عبارة حرفية","reason":"سبب مختصر","value":1}]}. المدة ${duration}. الكلمات: ${JSON.stringify(safeWords).slice(0,16000)}`, providerToken);
   const allowed = new Set(['highlight','subtle_zoom','vertical_crop','cinematic_color','transition']);
   const recommendations = (Array.isArray(parsed.recommendations)?parsed.recommendations:[]).map(x=>{
     const start=Number(x.start),end=Number(x.end), phrase=String(x.phrase||'').slice(0,100);
     if(!allowed.has(x.type)||!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end>duration||!phrase||!safeWords.some(w=>w.start<end&&w.end>start))return null;
     return {id:crypto.randomUUID(),type:x.type,start,end,phrase,reason:String(x.reason||'').slice(0,250),value:Math.max(0.1,Math.min(2,Number(x.value)||1)),approved:false};
   }).filter(Boolean).slice(0,5);
-  return {recommendations,model:status.model,local:true};
+  return {recommendations,model:status.model,provider:status.provider,local:!status.gateway};
 }
