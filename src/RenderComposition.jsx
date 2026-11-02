@@ -1,6 +1,7 @@
 import React from 'react';
 import {AbsoluteFill,Audio,Html5Video,Sequence,spring,useCurrentFrame,useVideoConfig} from 'remotion';
 import {effectStyles} from './effects/EffectEngine.js';
+import {getTextLayerStyle} from './text/TextStylePresets.js';
 
 function Caption({words,start=0,end,fps,style='cyan'}){
   const frame=useCurrentFrame();
@@ -43,7 +44,7 @@ function ProjectLayers({project,settings}){
     return <Sequence key={clip.id} from={Math.round(clip.start*fps)} durationInFrames={Math.max(1,Math.round((clip.end-clip.start)*fps))} layout="none"><ClipPicture clip={clip}/>{settings.caption&&<Caption words={words} start={0} end={clip.end-clip.start} fps={fps} style={settings.captionStyle}/>}</Sequence>;
   }));
   const audioLayers=project.tracks.filter(track=>track.type==='audio').flatMap(track=>track.clips.map(clip=><Sequence key={clip.id} from={Math.round(clip.start*fps)} durationInFrames={Math.max(1,Math.round((clip.end-clip.start)*fps))}><Audio src={clip.src} startFrom={Math.round((clip.sourceStart||0)*fps)} endAt={Math.round((clip.sourceEnd||clip.end)*fps)} volume={clip.volume??1}/></Sequence>));
-  const textLayers=project.tracks.filter(track=>track.type==='text').flatMap(track=>track.clips.filter(clip=>clip.text).map(clip=><Sequence key={clip.id} from={Math.round(clip.start*fps)} durationInFrames={Math.max(1,Math.round((clip.end-clip.start)*fps))}><div dir={clip.direction||'auto'} style={{position:'absolute',left:clip.x||'8%',right:clip.right||'8%',bottom:clip.bottom||'13%',textAlign:clip.align||'center',fontFamily:clip.fontFamily||'Thmanyah Sans,Thmanyah,Arial,Tahoma,sans-serif',fontSize:clip.fontSize||54,fontWeight:clip.fontWeight||800,color:clip.color||'#fff',WebkitTextStroke:clip.outline||'1px #111',textShadow:clip.shadow||'0 3px 12px #000',background:clip.background||'transparent',padding:clip.padding||0}}>{clip.text}</div></Sequence>));
+  const textLayers=project.tracks.filter(track=>track.type==='text').flatMap(track=>track.clips.filter(clip=>clip.text).map(clip=><Sequence key={clip.id} from={Math.round(clip.start*fps)} durationInFrames={Math.max(1,Math.round((clip.end-clip.start)*fps))}><div dir={clip.direction||'auto'} style={getTextLayerStyle(clip)}>{clip.text}</div></Sequence>));
   return <>{videoLayers}{audioLayers}{textLayers}</>;
 }
 
